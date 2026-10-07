@@ -1,0 +1,13 @@
+# Private certificate repository. Override with the MATCH_GIT_URL secret
+# so the committed file can keep this placeholder.
+git_url(ENV["MATCH_GIT_URL"] || "https://github.com/YOUR_ORG/apptemplate-match.git")
+
+storage_mode("git")
+type("appstore")
+
+app_identifier(["com.example.apptemplate"])
+team_id(ENV["APPLE_TEAM_ID"] || "YOUR_TEAM_ID")
+
+# Beta uploads only read certificates. The one-time writable sync is the
+# `certificates` lane (MATCH_READONLY=false).
+readonly(true)
