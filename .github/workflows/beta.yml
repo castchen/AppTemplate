@@ -1,0 +1,93 @@
+name: Beta
+
+on:
+  workflow_dispatch:
+    inputs:
+      command:
+        description: "beta: readonly Match, then TestFlight. certificates: one-time writable Match sync only."
+        required: true
+        type: choice
+        default: beta
+        options:
+          - beta
+          - certificates
+
+permissions:
+  contents: read
+
+concurrency:
+  group: testflight
+  cancel-in-progress: false
+
+jobs:
+  testflight:
+    name: Match → gym → TestFlight
+    runs-on: macos-26
+    timeout-minutes: 60
+    env:
+      APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+      APP_STORE_CONNECT_API_KEY_ID: ${{ secrets.APP_STORE_CONNECT_API_KEY_ID }}
+      APP_STORE_CONNECT_API_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_API_ISSUER_ID }}
+      APP_STORE_CONNECT_API_KEY_KEY: ${{ secrets.APP_STORE_CONNECT_API_KEY_KEY }}
+      MATCH_PASSWORD: ${{ secrets.MATCH_PASSWORD }}
+      MATCH_GIT_URL: ${{ secrets.MATCH_GIT_URL }}
+      MATCH_GIT_BASIC_AUTHORIZATION: ${{ secrets.MATCH_GIT_BASIC_AUTHORIZATION }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Require signing secrets
+        env:
+          FASTLANE_COMMAND: ${{ inputs.command }}
+        run: |
+          set -euo pipefail
+          missing=()
+          for name in \
+            APPLE_TEAM_ID \
+            APP_STORE_CONNECT_API_KEY_ID \
+            APP_STORE_CONNECT_API_ISSUER_ID \
+            APP_STORE_CONNECT_API_KEY_KEY \
+            MATCH_PASSWORD \
+            MATCH_GIT_URL \
+            MATCH_GIT_BASIC_AUTHORIZATION
+          do
+            if [ -z "${!name}" ]; then
+              missing+=("$name")
+            fi
+          done
+          if [ "${#missing[@]}" -gt 0 ]; then
+            echo "::error::Missing GitHub Secrets: ${missing[*]}. See README.md. No secret values were printed."
+            exit 1
+          fi
+          case "${FASTLANE_COMMAND}" in
+            beta)
+              echo "FASTLANE_LANE=beta" >> "$GITHUB_ENV"
+              echo "MATCH_READONLY=true" >> "$GITHUB_ENV"
+              echo "Readonly Match, then TestFlight."
+              ;;
+            certificates)
+              echo "FASTLANE_LANE=certificates" >> "$GITHUB_ENV"
+              echo "MATCH_READONLY=false" >> "$GITHUB_ENV"
+              echo "Writable Match sync only. No archive or upload."
+              ;;
+            *)
+              echo "::error::Unknown command: ${FASTLANE_COMMAND}"
+              exit 1
+              ;;
+          esac
+
+      - name: Show Xcode
+        run: xcodebuild -version
+
+      - name: Set up Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          bundler-cache: true
+
+      - name: Install XcodeGen
+        run: |
+          brew install xcodegen
+          xcodegen --version
+
+      - name: Run Fastlane
+        run: bundle exec fastlane ios "$FASTLANE_LANE"

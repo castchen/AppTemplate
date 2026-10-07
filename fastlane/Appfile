@@ -1,0 +1,4 @@
+app_identifier("com.example.apptemplate")
+
+# Prefer the GitHub Secret. YOUR_TEAM_ID is the committed placeholder.
+team_id(ENV["APPLE_TEAM_ID"] || "YOUR_TEAM_ID")
