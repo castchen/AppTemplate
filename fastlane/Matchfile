@@ -2,6 +2,9 @@
 # so the committed file can keep this placeholder.
 git_url(ENV["MATCH_GIT_URL"] || "https://github.com/YOUR_ORG/apptemplate-match.git")
 
+# New GitHub repos default to main (Match's default is master).
+git_branch("main")
+
 storage_mode("git")
 type("appstore")
 

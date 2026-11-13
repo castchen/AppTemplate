@@ -90,4 +90,35 @@ jobs:
           xcodegen --version
 
       - name: Run Fastlane
-        run: bundle exec fastlane ios "$FASTLANE_LANE"
+        run: |
+          set -euo pipefail
+
+          # Phone paste often adds whitespace / a trailing slash; SSH URLs break Basic auth.
+          url="$(printf '%s' "${MATCH_GIT_URL}" | tr -d '\r\n\t ')"
+          url="${url%/}"
+          case "$url" in
+            https://github.com/*/*) ;;
+            *)
+              echo "::error::MATCH_GIT_URL must be HTTPS like https://github.com/OWNER/apptemplate-match.git (not git@...)."
+              exit 1
+              ;;
+          esac
+          export MATCH_GIT_URL="$url"
+
+          # Newlines in MATCH_GIT_BASIC_AUTHORIZATION cause git/libcurl "bad argument".
+          # Accept either base64(username:PAT) or raw username:PAT (phone-friendly).
+          # Keep python one-liners so this YAML block stays valid.
+          cleaned="$(printf '%s' "${MATCH_GIT_BASIC_AUTHORIZATION}" | tr -d '\r\n\t ')"
+          decoded="$(printf '%s' "$cleaned" | python3 -c 'import base64,sys; sys.stdout.buffer.write(base64.b64decode(sys.stdin.buffer.read(), validate=False))' 2>/dev/null || true)"
+          if printf '%s' "$decoded" | grep -Eq '^[^[:space:]]+:[^[:space:]]+$'; then
+            export MATCH_GIT_BASIC_AUTHORIZATION="$cleaned"
+            echo "Match git auth: using base64 username:token (whitespace stripped)."
+          elif printf '%s' "$cleaned" | grep -Eq '^[^[:space:]]+:[^[:space:]]+$'; then
+            export MATCH_GIT_BASIC_AUTHORIZATION="$(printf '%s' "$cleaned" | python3 -c 'import base64,sys; print(base64.b64encode(sys.stdin.buffer.read()).decode(), end="")')"
+            echo "Match git auth: encoded raw username:token to base64 in CI."
+          else
+            echo "::error::MATCH_GIT_BASIC_AUTHORIZATION must be base64 of username:PAT, or the raw username:PAT string. No secret values were printed."
+            exit 1
+          fi
+
+          bundle exec fastlane ios "$FASTLANE_LANE"
