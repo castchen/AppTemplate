@@ -67,16 +67,28 @@ PR workflow 不读任何 Secret。
 1. 新建一个空的私有仓库，例如 `apptemplate-match`。不要往里面手工提交 `.p12`。
 2. 准备 Match 加密口令，存成 Secret `MATCH_PASSWORD`。丢了口令就解不开已有证书。
 3. 给这个私有仓发一个只含 `repo` 权限的 Personal Access Token（或 fine-grained token，内容权限为证书仓的读写）。
-4. 生成 Basic 认证并写入 `MATCH_GIT_BASIC_AUTHORIZATION`（整行是 Base64，不要换行）：
+4. 写入 Secret `MATCH_GIT_BASIC_AUTHORIZATION`，两种写法二选一：
 
-   ```bash
-   printf '%s' 'YOUR_GITHUB_USERNAME:YOUR_PAT' | base64
-   ```
+   - **手机友好（推荐）**：直接填原文 `你的GitHub用户名:你的PAT`（英文冒号，无空格）。CI 会自动做 Base64。
+   - **或**先 Base64 再填（整行、不要换行；手机快捷指令生成的 Base64 常带换行，会导致 `libcurl … bad argument`）：
 
-5. 把证书仓 HTTPS 地址写入 `MATCH_GIT_URL`。`Matchfile` 里的 `https://github.com/YOUR_ORG/apptemplate-match.git` 只是占位，Secret 会覆盖它。
+     ```bash
+     printf '%s' 'YOUR_GITHUB_USERNAME:YOUR_PAT' | base64
+     ```
+
+5. 把证书仓 **HTTPS** 地址写入 `MATCH_GIT_URL`（例如 `https://github.com/YOUR_ORG/apptemplate-match.git`，不要用 `git@…`，不要末尾多余空格）。`Matchfile` 里的占位会被 Secret 覆盖。
 6. 在 App Store Connect 为 Bundle ID 建好 App 记录（TestFlight 上传需要它）。
 7. 冷启动只做一次：Actions → Beta → Run workflow，把 command 选成 `certificates`。这一步只跑可写 Match：创建或复用 Distribution 证书，并为 `com.example.apptemplate` 生成描述文件，写进证书仓，不归档、不上传。已有 Distribution 证书时 Match 会尽量复用。
 8. 之后上传选默认的 `beta`。它只读拉取证书，再 `gym` 上传 TestFlight，不改证书仓。
+
+## 常见失败对照
+
+| 现象 | 常见原因 | 怎么处理 |
+|------|----------|----------|
+| Fastlane 报找不到 `project.yml` / xcodegen 失败 | Fastlane 工作目录在 `fastlane/` | 模板已用 `Dir.chdir("..")` 再跑 `xcodegen`；确认你没改回裸 `sh("xcodegen")` |
+| `libcurl … bad argument` / Match clone 失败 | `MATCH_GIT_BASIC_AUTHORIZATION` 含换行或空白，或填了 SSH URL | 用原文 `user:PAT` 或整行 Base64；`MATCH_GIT_URL` 必须是 HTTPS |
+| Actions 页看不到 Run workflow / workflow 变灰 | `beta.yml` YAML 非法（多行 `python -c` 缩进易坏） | 保持 CI 里 python 为一行 `python3 -c '…'`，改完用 YAML 解析器自检 |
+| TestFlight / altool `90717` | 1024 App Icon 带透明通道 | 商店图标必须是不透明 RGB PNG（本模板 `AppIcon-1024.png` 已去 alpha） |
 
 ## PR 和 TestFlight 怎么触发
 

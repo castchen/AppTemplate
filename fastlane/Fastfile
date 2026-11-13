@@ -2,7 +2,10 @@ default_platform(:ios)
 
 platform :ios do
   before_all do
-    sh("xcodegen", "generate")
+    # Fastlane's shell cwd is ./fastlane; project.yml lives at the repo root.
+    Dir.chdir("..") do
+      sh("xcodegen", "generate")
+    end
   end
 
   private_lane :asc_api_key do
